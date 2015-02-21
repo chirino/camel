@@ -17,6 +17,7 @@
 package org.apache.camel.impl;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -130,6 +131,11 @@ public class TimeoutInflightRepository extends ServiceSupport implements Infligh
 
     @Override
     public Collection<InflightExchange> browse(int limit, boolean sortByLongestDuration) {
+        return null;
+    }
+
+    @Override
+    public Collection<InflightExchange> browse(String routeId, int limit, Comparator<InflightExchange> comparator) {
         return null;
     }
 

@@ -93,36 +93,54 @@ public class DefaultInflightRepository extends ServiceSupport implements Infligh
     }
 
     @Override
-    public Collection<InflightExchange> browse(int limit, boolean sortByLongestDuration) {
-        List<InflightExchange> answer = new ArrayList<InflightExchange>();
-
-        List<Exchange> values = new ArrayList<Exchange>(inflight.values());
-        if (sortByLongestDuration) {
-            Collections.sort(values, new Comparator<Exchange>() {
+    public Collection<InflightExchange> browse( int limit, boolean sortByLongestDuration) {
+        Comparator<InflightExchange> comparator = sortByLongestDuration ?
+            new Comparator<InflightExchange>() {
                 @Override
-                public int compare(Exchange e1, Exchange e2) {
-                    long d1 = getExchangeDuration(e1);
-                    long d2 = getExchangeDuration(e2);
+                public int compare(InflightExchange e1, InflightExchange e2) {
+                    long d1 = e1.getDuration();
+                    long d2 = e2.getDuration();
                     return Long.compare(d1, d2);
                 }
-            });
-        } else {
-            // else sort by exchange id
-            Collections.sort(values, new Comparator<Exchange>() {
+            }
+        :
+            new Comparator<InflightExchange>() {
                 @Override
-                public int compare(Exchange e1, Exchange e2) {
-                    return e1.getExchangeId().compareTo(e2.getExchangeId());
+                public int compare(InflightExchange e1, InflightExchange e2) {
+                    return e1.getExchange().getExchangeId().compareTo(e2.getExchange().getExchangeId());
                 }
-            });
-        }
+            }
+        ;
+        return browse(null, limit, comparator);
+    }
 
-        for (Exchange exchange : values) {
-            answer.add(new InflightExchangeEntry(exchange));
-            if (limit > 0 && answer.size() >= limit) {
-                break;
+    @Override
+    public Collection<InflightExchange> browse(String routeId, int limit, Comparator<InflightExchange> comparator) {
+
+        ArrayList<InflightExchange> matches = new ArrayList<InflightExchange>();
+        for (Exchange exchange : inflight.values()) {
+            InflightExchangeEntry entry = new InflightExchangeEntry(exchange);
+            if( routeId==null || routeId.equals(entry.getRouteId()) ) {
+                matches.add(entry);
             }
         }
-        return Collections.unmodifiableCollection(answer);
+        
+        if (comparator!=null) {
+            Collections.sort(matches, comparator);
+        }
+
+        if( limit <= 0 || matches.size() <= limit  ) {
+            return Collections.unmodifiableCollection(matches);
+        } else {
+            ArrayList<InflightExchange> limited = new ArrayList<InflightExchange>(limit);
+            for (InflightExchange entry : matches) {
+                limited.add(entry);
+                if (limit > 0 && limited.size() >= limit) {
+                    break;
+                }
+            }
+            return Collections.unmodifiableCollection(limited);
+        }
     }
 
     @Override

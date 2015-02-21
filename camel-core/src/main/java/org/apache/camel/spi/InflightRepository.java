@@ -17,6 +17,7 @@
 package org.apache.camel.spi;
 
 import java.util.Collection;
+import java.util.Comparator;
 
 import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
@@ -143,5 +144,14 @@ public interface InflightRepository extends StaticService {
      *                              set to <tt>false</tt> to sort by exchange id
      */
     Collection<InflightExchange> browse(int limit, boolean sortByLongestDuration);
+
+    /**
+     * A <i>read-only</i> browser of the {@link InflightExchange}s that are currently inflight.
+     *
+     * @param routeId the route id to match against.  Set to null to browse all routes.
+     * @param limit maximum number of entries to return.
+     * @param comparator Used to sort the result.  Set to null, if sorting is not required.
+     */
+    Collection<InflightExchange> browse(String routeId, int limit, Comparator<InflightExchange> comparator);
 
 }

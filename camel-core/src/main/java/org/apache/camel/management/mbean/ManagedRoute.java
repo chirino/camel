@@ -16,13 +16,7 @@
  */
 package org.apache.camel.management.mbean;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import javax.management.AttributeValueExp;
 import javax.management.MBeanServer;
@@ -43,6 +37,7 @@ import org.apache.camel.api.management.mbean.ManagedRouteMBean;
 import org.apache.camel.model.ModelCamelContext;
 import org.apache.camel.model.ModelHelper;
 import org.apache.camel.model.RouteDefinition;
+import org.apache.camel.spi.InflightRepository;
 import org.apache.camel.spi.RoutePolicy;
 import org.apache.camel.util.ObjectHelper;
 
@@ -386,6 +381,37 @@ public class ManagedRoute extends ManagedPerformanceCounter implements TimerList
         public int compare(ManagedProcessorMBean o1, ManagedProcessorMBean o2) {
             return o1.getIndex().compareTo(o2.getIndex());
         }
+    }
+
+    private InflightRepository.InflightExchange getOldestInflightEntry() {
+        Map.Entry<String, Long> oldest=null;
+        InflightRepository inflightRepository = context.getInflightRepository();
+        if( inflightRepository != null ) {
+            Collection<InflightRepository.InflightExchange> exchanges = inflightRepository.browse(getRouteId(), 1, new Comparator<InflightRepository.InflightExchange>() {
+                @Override
+                public int compare(InflightRepository.InflightExchange e1, InflightRepository.InflightExchange e2) {
+                    return Long.compare(e2.getDuration(), e1.getDuration());
+                }
+            });
+            if( exchanges!=null && !exchanges.isEmpty() ) {
+                return exchanges.iterator().next();
+            }
+        }
+        return null;
+    }
+
+    public Long getOldestInflightDuration() {
+        InflightRepository.InflightExchange oldest = getOldestInflightEntry();
+        if( oldest == null )
+            return null;
+        return oldest.getDuration();
+    }
+
+    public String getOldestInflightExchangeId() {
+        InflightRepository.InflightExchange oldest = getOldestInflightEntry();
+        if( oldest == null )
+            return null;
+        return oldest.getExchange().getExchangeId();
     }
 
 }

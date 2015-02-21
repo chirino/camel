@@ -19,6 +19,8 @@ package org.apache.camel.api.management.mbean;
 import org.apache.camel.api.management.ManagedAttribute;
 import org.apache.camel.api.management.ManagedOperation;
 
+import java.util.Date;
+
 public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
 
     @ManagedAttribute(description = "Route ID")
@@ -113,5 +115,12 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
 
     @ManagedOperation(description = "Returns the JSON representation of all the static endpoints (and possible dynamic) defined in this route")
     String createRouteStaticEndpointJson(boolean includeDynamic);
+
+    @ManagedAttribute(description = "Oldest inflight exchange duration")
+    Long getOldestInflightDuration();
+
+    @ManagedAttribute(description = "Oldest inflight exchange id")
+    String getOldestInflightExchangeId();
+
 
 }
