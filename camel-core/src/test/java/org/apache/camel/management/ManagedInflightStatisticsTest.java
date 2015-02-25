@@ -46,7 +46,7 @@ public class ManagedInflightStatisticsTest extends ManagementTestSupport {
 
         Long inflight = (Long) mbeanServer.getAttribute(on, "ExchangesInflight");
         assertEquals(0, inflight.longValue());
-        Date ts = (Date) mbeanServer.getAttribute(on, "OldestInflightDuration");
+        Long ts = (Long) mbeanServer.getAttribute(on, "OldestInflightDuration");
         assertNull(ts);
         String id = (String) mbeanServer.getAttribute(on, "OldestInflightExchangeId");
         assertNull(id);
@@ -63,23 +63,21 @@ public class ManagedInflightStatisticsTest extends ManagementTestSupport {
         inflight = (Long) mbeanServer.getAttribute(on, "ExchangesInflight");
         assertEquals(2, inflight.longValue());
 
-        ts = (Date) mbeanServer.getAttribute(on, "OldestInflightDuration");
+        ts = (Long) mbeanServer.getAttribute(on, "OldestInflightDuration");
         assertNotNull(ts);
         id = (String) mbeanServer.getAttribute(on, "OldestInflightExchangeId");
         assertNotNull(id);
-        System.out.println("id: "+id);
 
         // Lets wait for the first exchange to complete.
         Thread.sleep(500);
-        Date ts2 = (Date) mbeanServer.getAttribute(on, "OldestInflightDuration");
+        Long ts2 = (Long) mbeanServer.getAttribute(on, "OldestInflightDuration");
         assertNotNull(ts2);
         String id2 = (String) mbeanServer.getAttribute(on, "OldestInflightExchangeId");
         assertNotNull(id2);
-        System.out.println("id2: " + id2);
 
         // Lets verify the oldest changed.
         assertTrue(!id2.equals(id));
-        assertTrue(ts2.after(ts));
+        assertTrue(ts2 > ts);
 
         // Lets wait for all the exchanges to complete.
         Thread.sleep(500);
@@ -88,7 +86,7 @@ public class ManagedInflightStatisticsTest extends ManagementTestSupport {
 
         inflight = (Long) mbeanServer.getAttribute(on, "ExchangesInflight");
         assertEquals(0, inflight.longValue());
-        ts = (Date) mbeanServer.getAttribute(on, "OldestInflightDuration");
+        ts = (Long) mbeanServer.getAttribute(on, "OldestInflightDuration");
         assertNull(ts);
         id = (String) mbeanServer.getAttribute(on, "OldestInflightExchangeId");
         assertNull(id);

@@ -17,6 +17,7 @@
 package org.apache.camel.management.mbean;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import javax.management.AttributeValueExp;
 import javax.management.MBeanServer;
@@ -26,11 +27,7 @@ import javax.management.Query;
 import javax.management.QueryExp;
 import javax.management.StringValueExp;
 
-import org.apache.camel.CamelContext;
-import org.apache.camel.ManagementStatisticsLevel;
-import org.apache.camel.Route;
-import org.apache.camel.ServiceStatus;
-import org.apache.camel.TimerListener;
+import org.apache.camel.*;
 import org.apache.camel.api.management.ManagedResource;
 import org.apache.camel.api.management.mbean.ManagedProcessorMBean;
 import org.apache.camel.api.management.mbean.ManagedRouteMBean;
@@ -38,6 +35,7 @@ import org.apache.camel.model.ModelCamelContext;
 import org.apache.camel.model.ModelHelper;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.spi.InflightRepository;
+import org.apache.camel.spi.ManagementStrategy;
 import org.apache.camel.spi.RoutePolicy;
 import org.apache.camel.util.ObjectHelper;
 
@@ -48,6 +46,7 @@ public class ManagedRoute extends ManagedPerformanceCounter implements TimerList
     protected final String description;
     protected final ModelCamelContext context;
     private final LoadTriplet load = new LoadTriplet();
+    private final Map<String, Long> exchangesInFlightStartTimestamps = Collections.synchronizedMap(new LinkedHashMap());
 
     public ManagedRoute(ModelCamelContext context, Route route) {
         this.route = route;
@@ -383,35 +382,43 @@ public class ManagedRoute extends ManagedPerformanceCounter implements TimerList
         }
     }
 
-    private InflightRepository.InflightExchange getOldestInflightEntry() {
-        Map.Entry<String, Long> oldest=null;
-        InflightRepository inflightRepository = context.getInflightRepository();
-        if( inflightRepository != null ) {
-            Collection<InflightRepository.InflightExchange> exchanges = inflightRepository.browse(getRouteId(), 1, new Comparator<InflightRepository.InflightExchange>() {
-                @Override
-                public int compare(InflightRepository.InflightExchange e1, InflightRepository.InflightExchange e2) {
-                    return Long.compare(e2.getDuration(), e1.getDuration());
-                }
-            });
-            if( exchanges!=null && !exchanges.isEmpty() ) {
-                return exchanges.iterator().next();
-            }
+    private Map.Entry<String, Long> getOldestInflightEntry() {
+        try {
+            return exchangesInFlightStartTimestamps.entrySet().iterator().next();
+        } catch (NoSuchElementException e) {
+            return null;
         }
-        return null;
     }
 
     public Long getOldestInflightDuration() {
-        InflightRepository.InflightExchange oldest = getOldestInflightEntry();
+        Map.Entry<String, Long> oldest = getOldestInflightEntry();
         if( oldest == null )
             return null;
-        return oldest.getDuration();
+        return System.currentTimeMillis() - oldest.getValue().longValue();
     }
 
     public String getOldestInflightExchangeId() {
-        InflightRepository.InflightExchange oldest = getOldestInflightEntry();
+        Map.Entry<String, Long> oldest = getOldestInflightEntry();
         if( oldest == null )
             return null;
-        return oldest.getExchange().getExchangeId();
+        return oldest.getKey();
     }
 
+    @Override
+    public void init(ManagementStrategy strategy) {
+        super.init(strategy);
+        exchangesInFlightStartTimestamps.clear();
+    }
+
+    @Override
+    public synchronized void processExchange(Exchange exchange) {
+        exchangesInFlightStartTimestamps.put(exchange.getExchangeId(), System.currentTimeMillis());
+        super.processExchange(exchange);
+    }
+
+    @Override
+    public synchronized void completedExchange(Exchange exchange, long time) {
+        exchangesInFlightStartTimestamps.remove(exchange.getExchangeId());
+        super.completedExchange(exchange, time);
+    }
 }
