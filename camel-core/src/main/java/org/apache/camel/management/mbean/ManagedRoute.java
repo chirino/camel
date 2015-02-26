@@ -17,6 +17,7 @@
 package org.apache.camel.management.mbean;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import javax.management.AttributeValueExp;
@@ -42,11 +43,60 @@ import org.apache.camel.util.ObjectHelper;
 @ManagedResource(description = "Managed Route")
 public class ManagedRoute extends ManagedPerformanceCounter implements TimerListener, ManagedRouteMBean {
     public static final String VALUE_UNKNOWN = "Unknown";
+
+    private static class InFlightKey implements Comparable<InFlightKey> {
+
+        private final Long timeStamp;
+        private final String exchangeId;
+
+        InFlightKey(Long timeStamp, String exchangeId) {
+            this.exchangeId = exchangeId;
+            this.timeStamp = timeStamp;
+        }
+
+        @Override
+        public int compareTo(InFlightKey o) {
+            int compare = Long.compare(timeStamp, o.timeStamp);
+            if( compare == 0 ) {
+                return exchangeId.compareTo(o.exchangeId);
+            }
+            return compare;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            InFlightKey that = (InFlightKey) o;
+
+            if (!exchangeId.equals(that.exchangeId)) return false;
+            if (!timeStamp.equals(that.timeStamp)) return false;
+
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = timeStamp.hashCode();
+            result = 31 * result + exchangeId.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return exchangeId;
+        }
+    }
+
+
     protected final Route route;
     protected final String description;
     protected final ModelCamelContext context;
     private final LoadTriplet load = new LoadTriplet();
-    private final Map<String, Long> exchangesInFlightStartTimestamps = Collections.synchronizedMap(new LinkedHashMap());
+
+    private final ConcurrentSkipListMap<InFlightKey, Long> exchangesInFlightStartTimestamps = new ConcurrentSkipListMap<InFlightKey, Long>();
+    private final ConcurrentHashMap<String, InFlightKey> exchangesInFlightKeys = new ConcurrentHashMap<String, InFlightKey>();
 
     public ManagedRoute(ModelCamelContext context, Route route) {
         this.route = route;
@@ -382,26 +432,26 @@ public class ManagedRoute extends ManagedPerformanceCounter implements TimerList
         }
     }
 
-    private Map.Entry<String, Long> getOldestInflightEntry() {
-        try {
-            return exchangesInFlightStartTimestamps.entrySet().iterator().next();
-        } catch (NoSuchElementException e) {
-            return null;
+    private InFlightKey getOldestInflightEntry() {
+        Map.Entry<InFlightKey, Long> entry = exchangesInFlightStartTimestamps.firstEntry();
+        if( entry!=null ) {
+            return entry.getKey();
         }
+        return null;
     }
 
     public Long getOldestInflightDuration() {
-        Map.Entry<String, Long> oldest = getOldestInflightEntry();
+        InFlightKey oldest = getOldestInflightEntry();
         if( oldest == null )
             return null;
-        return System.currentTimeMillis() - oldest.getValue().longValue();
+        return System.currentTimeMillis() - oldest.timeStamp;
     }
 
     public String getOldestInflightExchangeId() {
-        Map.Entry<String, Long> oldest = getOldestInflightEntry();
+        InFlightKey oldest = getOldestInflightEntry();
         if( oldest == null )
             return null;
-        return oldest.getKey();
+        return oldest.exchangeId;
     }
 
     @Override
@@ -412,13 +462,18 @@ public class ManagedRoute extends ManagedPerformanceCounter implements TimerList
 
     @Override
     public synchronized void processExchange(Exchange exchange) {
-        exchangesInFlightStartTimestamps.put(exchange.getExchangeId(), System.currentTimeMillis());
+        InFlightKey key = new InFlightKey(System.currentTimeMillis(), exchange.getExchangeId());
+        exchangesInFlightKeys.put(exchange.getExchangeId(), key);
+        exchangesInFlightStartTimestamps.put(key, key.timeStamp);
         super.processExchange(exchange);
     }
 
     @Override
     public synchronized void completedExchange(Exchange exchange, long time) {
-        exchangesInFlightStartTimestamps.remove(exchange.getExchangeId());
+        InFlightKey key = exchangesInFlightKeys.remove(exchange.getExchangeId());
+        if( key!=null ) {
+            exchangesInFlightStartTimestamps.remove(key);
+        }
         super.completedExchange(exchange, time);
     }
 }
