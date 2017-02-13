@@ -18,8 +18,10 @@ package org.apache.camel.maven.connector;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -47,8 +49,8 @@ public class ConnectorMojo extends AbstractJarMojo {
      */
     public static class ComponentDTO {
         public ComponentHeaderDTO component = new ComponentHeaderDTO();
-        public Map<String, Map> componentProperties = new HashMap<>();
-        public Map<String, Map> properties = new HashMap<>();
+        public LinkedHashMap<String, Map> componentProperties = new LinkedHashMap<>();
+        public LinkedHashMap<String, Map> properties = new LinkedHashMap<>();
     }
 
     public static class ComponentHeaderDTO {
@@ -196,7 +198,7 @@ public class ConnectorMojo extends AbstractJarMojo {
                 // also write the file in the root folder so its easier to find that for tooling
                 File out = new File(classesDirectory,"camel-connector-schema.json");
                 FileOutputStream fos = new FileOutputStream(out, false);
-                mapper.writeValue(fos, allNewJsons);
+                mapper.writer(new CamelComponentPrettyPrinter()).writeValue(fos, allNewJsons);
                 fos.close();
 
                 // build json schema for component that only has the selectable options
@@ -238,7 +240,7 @@ public class ConnectorMojo extends AbstractJarMojo {
             File out = new File(subDir, name);
 
             FileOutputStream fos = new FileOutputStream(out, false);
-            mapper.writeValue(fos, newJson);
+            mapper.writer(new CamelComponentPrettyPrinter()).writeValue(fos, newJson);
             fos.close();
         }
         return newJson;
@@ -263,8 +265,8 @@ public class ConnectorMojo extends AbstractJarMojo {
         return null;
     }
 
-    private Map<String, Map> buildComponentOptionsSchema(ComponentDTO component, ConnectorDTO connector) throws JsonProcessingException {
-        HashMap<String, Map> rc = new HashMap<>();
+    private LinkedHashMap<String, Map> buildComponentOptionsSchema(ComponentDTO component, ConnectorDTO connector) throws JsonProcessingException {
+        LinkedHashMap<String, Map> rc = new LinkedHashMap<>();
         // we do not offer editing component properties (yet) so skip this for now..
 //        for (Map.Entry<String, Map> entry : source.componentProperties.entrySet()) {
 //            rc.put(entry.getKey(), entry.getValue());
@@ -272,13 +274,13 @@ public class ConnectorMojo extends AbstractJarMojo {
         return rc;
     }
 
-    private Map<String, Map> buildEndpointOptionsSchema(ComponentDTO component, ConnectorDTO connector) throws JsonProcessingException {
+    private LinkedHashMap<String, Map> buildEndpointOptionsSchema(ComponentDTO component, ConnectorDTO connector) throws JsonProcessingException {
         // find the endpoint options
         List options = connector.endpointOptions;
         Map values = connector.endpointValues;
         Map overrides = connector.endpointOverrides;
 
-        HashMap<String, Map> rc = new HashMap<>();
+        LinkedHashMap<String, Map> rc = new LinkedHashMap<>();
         for (Map.Entry<String, Map> entry : component.properties.entrySet()) {
             HashMap<String, String> row = new HashMap<>(entry.getValue());
             String key = entry.getKey();
